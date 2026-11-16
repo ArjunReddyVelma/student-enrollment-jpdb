@@ -11,10 +11,20 @@
  * - executeCommand
  */
 
-var jpdbBaseURL = "http://api.login2explore.com:5577";
+var jpdbBaseURL = "https://api.login2explore.com:5577";
+
+function normalizeJpdbUrl(url) {
+    if (!url) return "https://api.login2explore.com:5577";
+    url = url.trim();
+    // Port 5577 on api.login2explore.com terminates TLS (HTTPS) directly
+    if (url.startsWith("http://api.login2explore.com")) {
+        url = url.replace("http://", "https://");
+    }
+    return url.replace(/\/+$/, "");
+}
 
 function setBaseUrl(apiBaseUrl) {
-    jpdbBaseURL = apiBaseUrl;
+    jpdbBaseURL = normalizeJpdbUrl(apiBaseUrl);
 }
 
 /**
@@ -113,32 +123,51 @@ function createSETRequest(token, jsonStr, dbName, relName, type, primaryKey, uni
 
 /**
  * Executes a JPDB command against a specified Base URL and API Endpoint
+ * Handles HTTP 200, 400, 401, CORS, and network errors gracefully.
  */
 function executeCommandAtGivenBaseUrl(reqString, dbBaseUrl, apiEndPointUrl) {
+    dbBaseUrl = normalizeJpdbUrl(dbBaseUrl);
     var url = dbBaseUrl + apiEndPointUrl;
-    var jsonObj;
-    $.ajax({
-        url: url,
-        type: "POST",
-        data: reqString,
-        async: false,
-        contentType: "application/json; charset=utf-8",
-        dataType: "json",
-        success: function (result) {
-            jsonObj = typeof result === "object" ? result : JSON.parse(result);
-        },
-        error: function (result) {
-            try {
-                var dataJsonObj = result.responseText;
-                jsonObj = typeof dataJsonObj === "object" ? dataJsonObj : JSON.parse(dataJsonObj);
-            } catch (e) {
-                jsonObj = {
-                    status: result.status || 500,
-                    message: result.statusText || "Database server unreachable or network error"
-                };
+    var jsonObj = null;
+
+    if (typeof $ !== "undefined" && typeof $.ajax === "function") {
+        $.ajax({
+            url: url,
+            type: "POST",
+            data: reqString,
+            async: false,
+            contentType: "text/plain; charset=utf-8",
+            dataType: "text", // use text to avoid parsererror when JPDB returns text/html Content-Type
+            success: function (result) {
+                try {
+                    jsonObj = typeof result === "object" ? result : JSON.parse(result);
+                } catch (e) {
+                    jsonObj = { status: 200, message: "Response received", raw: result };
+                }
+            },
+            error: function (jqXHR, textStatus, errorThrown) {
+                var rawText = jqXHR.responseText;
+                if (rawText) {
+                    try {
+                        jsonObj = JSON.parse(rawText);
+                    } catch (e) {
+                        jsonObj = {
+                            status: jqXHR.status || 500,
+                            message: rawText || errorThrown || "Server error"
+                        };
+                    }
+                } else {
+                    jsonObj = {
+                        status: jqXHR.status || 0,
+                        message: jqXHR.status === 0
+                            ? "Network error or CORS/SSL block (Ensure HTTPS is used)"
+                            : (errorThrown || "Request failed with HTTP status " + jqXHR.status)
+                    };
+                }
             }
-        }
-    });
+        });
+    }
+
     return jsonObj;
 }
 
@@ -151,6 +180,7 @@ function executeCommand(reqString, apiEndPointUrl) {
 
 // Global and CommonJS exports for environments
 if (typeof window !== "undefined") {
+    window.normalizeJpdbUrl = normalizeJpdbUrl;
     window.createGET_BY_KEYRequest = createGET_BY_KEYRequest;
     window.createPUTRequest = createPUTRequest;
     window.createUPDATERecordRequest = createUPDATERecordRequest;
@@ -162,6 +192,7 @@ if (typeof window !== "undefined") {
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
+        normalizeJpdbUrl: normalizeJpdbUrl,
         createGET_BY_KEYRequest: createGET_BY_KEYRequest,
         createPUTRequest: createPUTRequest,
         createUPDATERecordRequest: createUPDATERecordRequest,
@@ -171,4 +202,3 @@ if (typeof module !== "undefined" && module.exports) {
         setBaseUrl: setBaseUrl
     };
 }
-

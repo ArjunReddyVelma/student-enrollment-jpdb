@@ -210,7 +210,7 @@
 
         <div class="form-group">
           <label for="cfgBaseUrl" class="form-label">JPDB Base URL</label>
-          <input type="text" class="form-control" id="cfgBaseUrl" value="http://api.login2explore.com:5577">
+          <input type="text" class="form-control" id="cfgBaseUrl" value="https://api.login2explore.com:5577">
         </div>
 
         <div class="form-group">
@@ -240,14 +240,8 @@
   <!-- 1. jQuery Library -->
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
 
-  <!-- 2. JSONPowerDB Official Library (Online CDN + Local Fallback) -->
-  <script src="https://login2explore.com/jpdb/resources/js/0.0.4/jpdb-commons.js"></script>
-  <script>
-    // Fallback if CDN is unreachable or offline
-    if (typeof createPUTRequest === 'undefined') {
-      document.write('<script src="js/jpdb-commons.js"><\/script>');
-    }
-  </script>
+  <!-- 2. JSONPowerDB Official Client Library -->
+  <script src="js/jpdb-commons.js"></script>
 
   <!-- 3. Optional Local Configuration (Ignored by Git) -->
   <script src="js/config.js" onerror="/* config.js is optional; defaults and localStorage are used if absent */"></script>

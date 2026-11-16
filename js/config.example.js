@@ -10,9 +10,9 @@
  *    via the "⚙️ Database Settings" modal in the application UI!
  */
 
-const JPDB_CONFIG = {
-    // JPDB Base URL
-    baseUrl: "http://api.login2explore.com:5577",
+var JPDB_CONFIG = {
+    // JPDB Base URL (HTTPS required on port 5577)
+    baseUrl: "https://api.login2explore.com:5577",
 
     // API Endpoints
     irlEndpoint: "/api/irl", // Retrieval (GET_BY_KEY, etc.)
@@ -28,3 +28,11 @@ const JPDB_CONFIG = {
     // Connection Token (obtain from Login2Explore JPDB Dashboard)
     connToken: ""
 };
+
+if (typeof window !== "undefined") {
+    window.JPDB_CONFIG = JPDB_CONFIG;
+}
+
+if (typeof module !== "undefined" && module.exports) {
+    module.exports = JPDB_CONFIG;
+}

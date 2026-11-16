@@ -14,11 +14,26 @@
   "use strict";
 
   // =========================================================================
+  // URL Normalizer Helper
+  // =========================================================================
+  function normalizeUrl(url) {
+    if (typeof normalizeJpdbUrl === "function") {
+      return normalizeJpdbUrl(url);
+    }
+    if (!url) return "https://api.login2explore.com:5577";
+    url = url.trim();
+    if (url.startsWith("http://api.login2explore.com")) {
+      url = url.replace("http://", "https://");
+    }
+    return url.replace(/\/+$/, "");
+  }
+
+  // =========================================================================
   // Configuration Manager
   // =========================================================================
   var AppConfig = {
     defaults: {
-      baseUrl: "http://api.login2explore.com:5577",
+      baseUrl: "https://api.login2explore.com:5577",
       irlEndpoint: "/api/irl",
       imlEndpoint: "/api/iml",
       dbName: "SCHOOL-DB",
@@ -31,27 +46,32 @@
       // 1. Check window.JPDB_CONFIG from config.js if present
       var externalConfig = window.JPDB_CONFIG || {};
 
-      // 2. Check localStorage for user-saved settings
-      var localToken = localStorage.getItem("jpdb_connToken") || "";
-      var localBaseUrl = localStorage.getItem("jpdb_baseUrl") || "";
+      // 2. Check localStorage for user-saved settings (supporting both key formats)
+      var localToken = localStorage.getItem("jpdb_connToken") || localStorage.getItem("connToken") || "";
+      var localBaseUrl = localStorage.getItem("jpdb_baseUrl") || localStorage.getItem("baseUrl") || "";
+      var rawBaseUrl = localBaseUrl || externalConfig.baseUrl || this.defaults.baseUrl;
 
       return {
-        baseUrl: localBaseUrl || externalConfig.baseUrl || this.defaults.baseUrl,
+        baseUrl: normalizeUrl(rawBaseUrl),
         irlEndpoint: externalConfig.irlEndpoint || this.defaults.irlEndpoint,
         imlEndpoint: externalConfig.imlEndpoint || this.defaults.imlEndpoint,
         dbName: externalConfig.dbName || this.defaults.dbName,
         relName: externalConfig.relName || this.defaults.relName,
         primaryKey: externalConfig.primaryKey || this.defaults.primaryKey,
-        connToken: localToken || externalConfig.connToken || this.defaults.connToken
+        connToken: (localToken || externalConfig.connToken || this.defaults.connToken).trim()
       };
     },
 
     save: function (token, baseUrl) {
+      var normUrl = normalizeUrl(baseUrl || this.defaults.baseUrl);
       if (token !== undefined) {
-        localStorage.setItem("jpdb_connToken", token.trim());
+        var cleanToken = token.trim();
+        localStorage.setItem("jpdb_connToken", cleanToken);
+        localStorage.setItem("connToken", cleanToken);
       }
       if (baseUrl !== undefined) {
-        localStorage.setItem("jpdb_baseUrl", baseUrl.trim());
+        localStorage.setItem("jpdb_baseUrl", normUrl);
+        localStorage.setItem("baseUrl", normUrl);
       }
       this.syncMetadataUI();
     },
@@ -63,11 +83,11 @@
       $("#metaPrimaryKey").text(cfg.primaryKey);
 
       if (cfg.connToken) {
-        $("#dbStatusBadge").removeClass("badge-warning").addClass("badge-status");
+        $("#dbStatusBadge").removeClass("badge-warning badge-danger").addClass("badge-status");
         $("#dbStatusDot").css("background", "#16a34a");
-        $("#dbStatusText").text("Connected / Ready");
+        $("#dbStatusText").text("Configured / Ready");
       } else {
-        $("#dbStatusBadge").removeClass("badge-status").addClass("badge-warning");
+        $("#dbStatusBadge").removeClass("badge-status badge-danger").addClass("badge-warning");
         $("#dbStatusDot").css("background", "#d97706");
         $("#dbStatusText").text("Token Not Configured");
       }
@@ -81,7 +101,8 @@
     currentRecNo: null,
     lastValidatedRollNo: null,
     isSubmitting: false,
-    mode: "INITIAL" // INITIAL | NEW | EXISTING
+    mode: "INITIAL", // INITIAL | NEW | EXISTING
+    connectionState: "Not Configured"
   };
 
   // =========================================================================
@@ -126,10 +147,44 @@
   // JPDB Command Dispatcher Helper
   // =========================================================================
   function dispatchJPDBCommand(reqString, baseUrl, endpoint) {
+    var safeBaseUrl = normalizeUrl(baseUrl);
     if (typeof window !== "undefined" && typeof window.executeCommandAtGivenBaseUrl === "function") {
-      return window.executeCommandAtGivenBaseUrl(reqString, baseUrl, endpoint);
+      return window.executeCommandAtGivenBaseUrl(reqString, safeBaseUrl, endpoint);
     }
-    return executeCommandAtGivenBaseUrl(reqString, baseUrl, endpoint);
+    return executeCommandAtGivenBaseUrl(reqString, safeBaseUrl, endpoint);
+  }
+
+  // =========================================================================
+  // Connection State Manager
+  // =========================================================================
+  function setConnectionState(stateName, details, alertType) {
+    AppState.connectionState = stateName;
+
+    // Update settings modal feedback if visible
+    if (DOM.$cfgTestFeedback) {
+      DOM.$cfgTestFeedback
+        .removeClass("alert-hidden alert-success alert-warning alert-danger alert-info")
+        .addClass("alert-" + (alertType || "info"))
+        .html("<strong>[" + stateName + "]</strong> " + details);
+    }
+
+    // Update top bar status badge
+    var badgeMap = {
+      "Connected": { cls: "badge-status", dot: "#16a34a", text: "Connected" },
+      "Connecting": { cls: "badge-warning", dot: "#3b82f6", text: "Connecting..." },
+      "Not Configured": { cls: "badge-warning", dot: "#d97706", text: "Token Not Configured" },
+      "Authentication Failed": { cls: "badge-danger", dot: "#dc2626", text: "Auth Failed" },
+      "Database Access Failed": { cls: "badge-warning", dot: "#d97706", text: "DB Notice" },
+      "Server Unavailable": { cls: "badge-danger", dot: "#dc2626", text: "Server Unavailable" },
+      "Network Error": { cls: "badge-danger", dot: "#dc2626", text: "Network Error" }
+    };
+
+    var entry = badgeMap[stateName] || { cls: "badge-status", dot: "#16a34a", text: stateName };
+    $("#dbStatusBadge")
+      .removeClass("badge-status badge-warning badge-danger")
+      .addClass(entry.cls);
+    $("#dbStatusDot").css("background", entry.dot);
+    $("#dbStatusText").text(entry.text);
   }
 
   // =========================================================================
@@ -243,7 +298,6 @@
         "<strong>JPDB Connection Token required:</strong> Please click <em>'⚙️ Database Settings'</em> to enter your token before querying.",
         "warning"
       );
-      // Enable fields in local preview mode so user is not blocked
       enableFieldsForNewRecord(rollNo);
       return;
     }
@@ -269,17 +323,34 @@
 
       DOM.$rollNoSpinner.hide();
 
-      if (res && res.status === 400) {
+      if (!res) {
+        DOM.$rollNo.prop("disabled", false);
+        showAlert("Network error or no response received from JPDB server (" + cfg.baseUrl + ").", "danger");
+        return;
+      }
+
+      var statusCode = parseInt(res.status, 10);
+      var msg = (res.message || "").toUpperCase();
+
+      if (statusCode === 200 && res.data) {
+        // RECORD ALREADY EXISTS in STUDENT-TABLE -> Populate data for update
+        populateFieldsForExistingRecord(rollNo, res);
+      } else if (
+        statusCode === 400 ||
+        msg.indexOf("DATA NOT FOUND") !== -1 ||
+        msg.indexOf("DATABASE DOES NOT EXIST") !== -1 ||
+        msg.indexOf("RELATION DOES NOT EXIST") !== -1
+      ) {
         // RECORD DOES NOT EXIST -> Enable for new record entry
         enableFieldsForNewRecord(rollNo);
-      } else if (res && res.status === 200) {
-        // RECORD ALREADY EXISTS -> Populate data for update
-        populateFieldsForExistingRecord(rollNo, res);
-      } else {
-        // Error or unexpected status
+      } else if (statusCode === 401 || msg.indexOf("INVALID TOKEN") !== -1) {
+        // Authentication failure
         DOM.$rollNo.prop("disabled", false);
-        var errMsg = (res && res.message) ? res.message : "Unable to query JSONPowerDB.";
-        showAlert("Database Query Error (" + (res ? res.status : "Network") + "): " + errMsg, "danger");
+        showAlert("Authentication Failed: Invalid JPDB Connection Token. Please update your token in Database Settings.", "danger");
+      } else {
+        // Other error
+        DOM.$rollNo.prop("disabled", false);
+        showAlert("Database Query Error (" + statusCode + "): " + (res.message || "Unknown error"), "danger");
       }
     } catch (err) {
       DOM.$rollNoSpinner.hide();
@@ -400,7 +471,7 @@
     var enrollmentDate = DOM.$enrollmentDate.val().trim();
     var address = DOM.$address.val().trim();
 
-    // 1. Roll-No validation (always required, must not be empty)
+    // 1. Roll-No validation
     if (!rollNo) {
       DOM.$rollNo.addClass("is-invalid");
       $("#rollNoError").text("Roll-No is required.").show();
@@ -642,20 +713,17 @@
 
   function testDatabaseConnection() {
     var token = DOM.$cfgConnToken.val().trim();
-    var baseUrl = DOM.$cfgBaseUrl.val().trim() || "http://api.login2explore.com:5577";
+    var baseUrl = normalizeUrl(DOM.$cfgBaseUrl.val().trim() || "https://api.login2explore.com:5577");
     var dbName = DOM.$cfgDbName.val().trim() || "SCHOOL-DB";
     var relName = DOM.$cfgRelName.val().trim() || "STUDENT-TABLE";
 
     if (!token) {
-      DOM.$cfgTestFeedback
-        .removeClass("alert-hidden alert-success")
-        .addClass("alert-warning")
-        .html("Please enter a Connection Token before testing.");
+      setConnectionState("Not Configured", "Please enter a Connection Token before testing.", "warning");
       return;
     }
 
+    setConnectionState("Connecting", "Testing connection to " + dbName + " &gt; " + relName + "...", "info");
     DOM.$btnTestConn.prop("disabled", true).html("<span>⏳</span> Testing...");
-    DOM.$cfgTestFeedback.addClass("alert-hidden");
 
     try {
       // Query sample key to test connectivity
@@ -671,25 +739,34 @@
       var res = dispatchJPDBCommand(testReq, baseUrl, "/api/irl");
       DOM.$btnTestConn.prop("disabled", false).html("<span>⚡</span> Test Connection");
 
-      if (res && (res.status === 200 || res.status === 400)) {
-        // 200 (found) or 400 (not found) confirms authentication and endpoint work!
-        DOM.$cfgTestFeedback
-          .removeClass("alert-hidden alert-danger alert-warning")
-          .addClass("alert-success")
-          .html("✅ Connection Successful! Connected to " + dbName + " &gt; " + relName);
+      if (!res) {
+        setConnectionState("Network Error", "No response received from " + baseUrl + ". Verify internet connection and SSL.", "danger");
+        return;
+      }
+
+      var statusCode = parseInt(res.status, 10);
+      var msg = (res.message || "").toUpperCase();
+
+      if (statusCode === 200) {
+        setConnectionState("Connected", "Successfully authenticated and connected to " + dbName + " &gt; " + relName + ".", "success");
+      } else if (statusCode === 401 || msg.indexOf("INVALID TOKEN") !== -1) {
+        setConnectionState("Authentication Failed", "Invalid JPDB Connection Token. Please verify token from Login2Explore dashboard.", "danger");
+      } else if (msg.indexOf("DATABASE DOES NOT EXIST") !== -1 || msg.indexOf("DATABASE DOES NOT EXISTS") !== -1) {
+        setConnectionState("Database Access Failed", "Token is valid, but database '" + dbName + "' does not exist yet (it will be created automatically on first Save).", "warning");
+      } else if (msg.indexOf("RELATION DOES NOT EXIST") !== -1 || msg.indexOf("RELATION DOES NOT EXISTS") !== -1) {
+        setConnectionState("Database Access Failed", "Token is valid, but relation '" + relName + "' does not exist yet (it will be created automatically on first Save).", "warning");
+      } else if (statusCode === 400 && msg.indexOf("DATA NOT FOUND") !== -1) {
+        setConnectionState("Connected", "Successfully authenticated and connected to " + dbName + " &gt; " + relName + ".", "success");
+      } else if (statusCode >= 500) {
+        setConnectionState("Server Unavailable", "JPDB Server returned status " + statusCode + ": " + (res.message || "Internal error"), "danger");
+      } else if (statusCode === 0) {
+        setConnectionState("Network Error", "Unable to connect to " + baseUrl + ". Check network connectivity or HTTPS settings.", "danger");
       } else {
-        var msg = (res && res.message) ? res.message : "Unexpected response from JPDB server.";
-        DOM.$cfgTestFeedback
-          .removeClass("alert-hidden alert-success")
-          .addClass("alert-danger")
-          .html("❌ Connection Failed (" + (res ? res.status : "Err") + "): " + msg);
+        setConnectionState("Database Access Failed", "JPDB returned status " + statusCode + ": " + (res.message || "Unknown response"), "danger");
       }
     } catch (err) {
       DOM.$btnTestConn.prop("disabled", false).html("<span>⚡</span> Test Connection");
-      DOM.$cfgTestFeedback
-        .removeClass("alert-hidden alert-success")
-        .addClass("alert-danger")
-        .html("❌ Network Error: " + err.message);
+      setConnectionState("Network Error", "Exception: " + err.message, "danger");
     }
   }
 
@@ -758,7 +835,10 @@
       validateFormData: validateFormData,
       saveStudent: saveStudent,
       updateStudent: updateStudent,
-      resetForm: resetForm
+      resetForm: resetForm,
+      testDatabaseConnection: testDatabaseConnection,
+      setConnectionState: setConnectionState,
+      dispatchJPDBCommand: dispatchJPDBCommand
     };
   });
 
