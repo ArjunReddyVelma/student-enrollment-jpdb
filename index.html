@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Enrollment Management System — JSONPowerDB</title>
+  <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div class="container">
+    <!-- Application Header -->
+    <header class="app-header">
+      <div class="brand-section">
+        <img src="assets/icon.svg" alt="Graduation Cap Emblem" class="brand-icon">
+        <div class="brand-text">
+          <h1>Student Enrollment Management System</h1>
+          <p>Manage student enrollment records using JSONPowerDB.</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button type="button" class="btn-icon" id="btnSettingsModal" title="Configure Database Connection">
+          <span>⚙️</span> Database Settings
+        </button>
+      </div>
+    </header>
+
+    <!-- Academic Database Metadata Bar -->
+    <div class="meta-bar">
+      <span class="badge badge-db" title="Target Database">
+        <strong>DB:</strong> <span id="metaDbName">SCHOOL-DB</span>
+      </span>
+      <span class="badge badge-rel" title="Target Relation / Table">
+        <strong>Relation:</strong> <span id="metaRelName">STUDENT-TABLE</span>
+      </span>
+      <span class="badge badge-pk" title="Primary Key Column">
+        <strong>Primary Key:</strong> <span id="metaPrimaryKey">Roll-No</span>
+      </span>
+      <span class="badge badge-status" id="dbStatusBadge">
+        <span class="status-dot" id="dbStatusDot"></span>
+        <span id="dbStatusText">Ready / Enter Roll-No</span>
+      </span>
+    </div>
+
+    <!-- Alert Container for Feedback / Error Messages -->
+    <div class="alert-container">
+      <div id="alertBox" class="alert alert-info alert-hidden" role="alert">
+        <span id="alertIcon">ℹ️</span>
+        <div id="alertContent">Welcome! Enter a Student Roll-No to begin.</div>
+        <button type="button" class="alert-close" id="btnAlertClose" aria-label="Close">&times;</button>
+      </div>
+    </div>
+
+    <!-- Main Student Enrollment Form Card -->
+    <main class="form-card">
+      <div class="form-header">
+        <h2>Student Enrollment Form</h2>
+        <span class="form-state-badge" id="formStateBadge">Initial State</span>
+      </div>
+
+      <form id="studentEnrollmentForm" autocomplete="off" novalidate>
+        <div class="form-grid">
+
+          <!-- 1. Roll-No (Primary Key) -->
+          <div class="form-group">
+            <label for="rollNo" class="form-label">
+              <span>Roll-No <span class="required-star">*</span></span>
+              <span class="pk-tag">PRIMARY KEY</span>
+            </label>
+            <div class="input-wrapper">
+              <input 
+                type="text" 
+                class="form-control" 
+                id="rollNo" 
+                name="Roll-No" 
+                placeholder="e.g. 101" 
+                autofocus 
+                required
+              >
+              <span class="input-spinner" id="rollNoSpinner"></span>
+            </div>
+            <span class="field-hint">Enter Roll Number and press Tab or click outside to verify.</span>
+            <span class="invalid-feedback" id="rollNoError">Please enter a valid Roll-No.</span>
+          </div>
+
+          <!-- 2. Full-Name -->
+          <div class="form-group">
+            <label for="fullName" class="form-label">
+              <span>Full-Name <span class="required-star">*</span></span>
+            </label>
+            <input 
+              type="text" 
+              class="form-control" 
+              id="fullName" 
+              name="Full-Name" 
+              placeholder="e.g. Eleanor Vance" 
+              disabled 
+              required
+            >
+            <span class="invalid-feedback" id="fullNameError">Full-Name is required (minimum 2 characters).</span>
+          </div>
+
+          <!-- 3. Class -->
+          <div class="form-group">
+            <label for="studentClass" class="form-label">
+              <span>Class <span class="required-star">*</span></span>
+            </label>
+            <input 
+              type="text" 
+              class="form-control" 
+              id="studentClass" 
+              name="Class" 
+              placeholder="e.g. 10-A or Grade 11" 
+              disabled 
+              required
+            >
+            <span class="invalid-feedback" id="classError">Class is required.</span>
+          </div>
+
+          <!-- 4. Birth-Date -->
+          <div class="form-group">
+            <label for="birthDate" class="form-label">
+              <span>Birth-Date <span class="required-star">*</span></span>
+            </label>
+            <input 
+              type="date" 
+              class="form-control" 
+              id="birthDate" 
+              name="Birth-Date" 
+              disabled 
+              required
+            >
+            <span class="invalid-feedback" id="birthDateError">Please enter a valid Birth-Date.</span>
+          </div>
+
+          <!-- 5. Enrollment-Date -->
+          <div class="form-group">
+            <label for="enrollmentDate" class="form-label">
+              <span>Enrollment-Date <span class="required-star">*</span></span>
+            </label>
+            <input 
+              type="date" 
+              class="form-control" 
+              id="enrollmentDate" 
+              name="Enrollment-Date" 
+              disabled 
+              required
+            >
+            <span class="invalid-feedback" id="enrollmentDateError">Please enter a valid Enrollment-Date.</span>
+          </div>
+
+          <!-- 6. Address -->
+          <div class="form-group form-group-full">
+            <label for="address" class="form-label">
+              <span>Address <span class="required-star">*</span></span>
+            </label>
+            <textarea 
+              class="form-control" 
+              id="address" 
+              name="Address" 
+              rows="3" 
+              placeholder="Enter residential street address, city, state, and postal code" 
+              disabled 
+              required
+            ></textarea>
+            <span class="invalid-feedback" id="addressError">Address is required.</span>
+          </div>
+
+        </div>
+
+        <!-- Form Actions Bar -->
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" id="btnReset" disabled>
+            <span>🔄</span> Reset
+          </button>
+          <button type="button" class="btn btn-warning" id="btnUpdate" disabled>
+            <span>✏️</span> Update
+          </button>
+          <button type="button" class="btn btn-primary" id="btnSave" disabled>
+            <span>💾</span> Save
+          </button>
+        </div>
+      </form>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <p>Student Enrollment Management System &bull; Powered by <a href="http://login2explore.com/jpdb/docs.html" target="_blank" rel="noopener noreferrer">JsonPowerDB</a> &bull; Academic Micro Project</p>
+    </footer>
+  </div>
+
+  <!-- Database Configuration Modal -->
+  <div class="modal-overlay" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="settingsModalTitle">⚙️ JSONPowerDB Connection Settings</h3>
+        <button type="button" class="modal-close" id="btnSettingsClose" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.85rem; color: var(--gray-600); margin-bottom: 4px;">
+          Configure your JsonPowerDB credentials below. Your token is stored safely in browser local storage and is never transmitted to external repositories.
+        </p>
+
+        <div class="form-group">
+          <label for="cfgConnToken" class="form-label">Connection Token <span class="required-star">*</span></label>
+          <input type="password" class="form-control" id="cfgConnToken" placeholder="Enter your 20-30 character JPDB token">
+          <span class="field-hint">Obtain from your Login2Explore JsonPowerDB Developer Dashboard.</span>
+        </div>
+
+        <div class="form-group">
+          <label for="cfgBaseUrl" class="form-label">JPDB Base URL</label>
+          <input type="text" class="form-control" id="cfgBaseUrl" value="http://api.login2explore.com:5577">
+        </div>
+
+        <div class="form-group">
+          <label for="cfgDbName" class="form-label">Database Name</label>
+          <input type="text" class="form-control" id="cfgDbName" value="SCHOOL-DB" readonly>
+        </div>
+
+        <div class="form-group">
+          <label for="cfgRelName" class="form-label">Relation Name</label>
+          <input type="text" class="form-control" id="cfgRelName" value="STUDENT-TABLE" readonly>
+        </div>
+
+        <div id="cfgTestFeedback" class="alert alert-hidden" style="margin-top: 8px;"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btnTestConn">
+          <span>⚡</span> Test Connection
+        </button>
+        <button type="button" class="btn btn-primary" id="btnSaveSettings">
+          <span>✓</span> Save Settings
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Required Scripts -->
+  <!-- 1. jQuery Library -->
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
+
+  <!-- 2. JSONPowerDB Official Library (Online CDN + Local Fallback) -->
+  <script src="https://login2explore.com/jpdb/resources/js/0.0.4/jpdb-commons.js"></script>
+  <script>
+    // Fallback if CDN is unreachable or offline
+    if (typeof createPUTRequest === 'undefined') {
+      document.write('<script src="js/jpdb-commons.js"><\/script>');
+    }
+  </script>
+
+  <!-- 3. Optional Local Configuration (Ignored by Git) -->
+  <script src="js/config.js" onerror="/* config.js is optional; defaults and localStorage are used if absent */"></script>
+
+  <!-- 4. Main Application Controller -->
+  <script src="js/app.js"></script>
+</body>
+</html>
